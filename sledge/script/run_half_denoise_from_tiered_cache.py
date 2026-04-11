@@ -268,7 +268,12 @@ def _lane_center_from_vector(vector: SledgeVector) -> float:
     return float(np.median(target[:, AgentIndex.Y]))
 
 
-def summarize_multiscenario_semantics(alignment: object, prompt_spec: object, vector: SledgeVector, threshold: float) -> Dict[str, object]:
+def summarize_multiscenario_semantics(
+    alignment: object,
+    prompt_spec: object,
+    vector: SledgeVector,
+    threshold: float,
+) -> Dict[str, object]:
     details = dict(getattr(alignment, "details", {}) or {})
     notes = list(getattr(alignment, "notes", []) or [])
     total = float(getattr(alignment, "total", 0.0))
@@ -301,8 +306,16 @@ def summarize_multiscenario_semantics(alignment: object, prompt_spec: object, ve
     if scenario_type == "cut_in":
         vehicle_states = np.asarray(vector.vehicles.states)
         vehicle_mask = np.asarray(vector.vehicles.mask)
+
         if vehicle_states.size == 0:
-            checks = {"candidate_vehicle_present": False, "ego_lane_occupancy": False, "short_headway": False, "moving_vehicle": False, "total_ok": False}
+            checks = {
+                "candidate_vehicle_present": False,
+                "front_insert_position": False,
+                "partial_lane_insertion": False,
+                "moving_vehicle": False,
+                "severity_match": False,
+                "total_ok": False,
+            }
             return {
                 "scenario_type": scenario_type,
                 "severity_level": severity_level,
@@ -313,31 +326,96 @@ def summarize_multiscenario_semantics(alignment: object, prompt_spec: object, ve
                 "notes": notes + ["no valid vehicle for cut-in evaluation"],
                 **{k: float(v) for k, v in details.items()},
             }
+
         if vehicle_states.ndim == 1:
             vehicle_states = vehicle_states[None, :]
         valid = vehicle_states[np.asarray(vehicle_mask).astype(float) >= 0.3]
-        lane_y = _lane_center_from_vector(vector)
-        forward = valid[(valid[:, AgentIndex.X] > 2.0) & (valid[:, AgentIndex.X] < 20.0)]
-        same_lane = forward[np.abs(forward[:, AgentIndex.Y] - lane_y) <= 1.8] if len(forward) > 0 else np.zeros((0, valid.shape[-1]), dtype=valid.dtype)
-        moving = same_lane[same_lane[:, AgentIndex.VELOCITY] > 0.4] if len(same_lane) > 0 else np.zeros((0, valid.shape[-1]), dtype=valid.dtype)
-        nearest_x = float(np.min(moving[:, AgentIndex.X])) if len(moving) > 0 else 1e9
+
+        lane_y = 0.0
+        lane_half_width = 1.8
+
+        # Scheme A: already partially inserted / inserted into ego lane ahead
+        # pick candidate vehicles in practical front range
+        forward = valid[(valid[:, AgentIndex.X] > 1.0) & (valid[:, AgentIndex.X] < 20.0)]
+
+        if len(forward) == 0:
+            checks = {
+                "candidate_vehicle_present": len(valid) > 0,
+                "front_insert_position": False,
+                "partial_lane_insertion": False,
+                "moving_vehicle": False,
+                "severity_match": False,
+                "total_ok": total >= threshold,
+            }
+            return {
+                "scenario_type": scenario_type,
+                "severity_level": severity_level,
+                "semantic_pass": False,
+                "threshold": float(threshold),
+                "effective_thresholds": {"total": float(threshold)},
+                "checks": checks,
+                "notes": notes + ["no forward candidate vehicle for cut-in evaluation"],
+                **{k: float(v) for k, v in details.items()},
+            }
+
+        # Prefer vehicles close to ego-lane boundary / partially inserted
+        lat_abs = np.abs(forward[:, AgentIndex.Y] - lane_y)
+        candidate_scores = -np.abs(lat_abs - 0.9) - 0.08 * np.abs(forward[:, AgentIndex.X] - 7.0)
+        best_idx = int(np.argmax(candidate_scores))
+        cand = forward[best_idx]
+
+        cand_x = float(cand[AgentIndex.X])
+        cand_y = float(cand[AgentIndex.Y])
+        cand_v = float(cand[AgentIndex.VELOCITY])
+
+        # Partially inserted means: already inside ego-lane envelope,
+        # but still visibly close to one lane side rather than perfectly centered.
+        lat_insert_abs = abs(cand_y - lane_y)
+
+        if severity_level == "mild":
+            x_min, x_max = 7.0, 14.0
+            y_min, y_max = 1.0, 1.7
+            ttc_min, ttc_max = 1.2, 3.5
+        elif severity_level == "aggressive":
+            x_min, x_max = 2.5, 7.0
+            y_min, y_max = 0.15, 0.9
+            ttc_min, ttc_max = 0.3, 1.2
+        else:
+            x_min, x_max = 4.5, 10.0
+            y_min, y_max = 0.5, 1.3
+            ttc_min, ttc_max = 0.6, 2.0
+
+        pseudo_ttc = cand_x / max(cand_v, 1e-3)
+
         checks = {
             "candidate_vehicle_present": len(valid) > 0,
-            "ego_lane_occupancy": len(same_lane) > 0,
-            "short_headway": nearest_x < 18.0,
-            "moving_vehicle": len(moving) > 0,
+            "front_insert_position": (cand_x >= x_min) and (cand_x <= x_max),
+            "partial_lane_insertion": (lat_insert_abs <= lane_half_width + 0.2) and (lat_insert_abs >= y_min) and (lat_insert_abs <= y_max),
+            "moving_vehicle": cand_v > 0.4,
+            "severity_match": (pseudo_ttc >= ttc_min) and (pseudo_ttc <= ttc_max),
             "total_ok": total >= threshold,
         }
+
         semantic_pass = all(checks.values()) and (accepted or total >= threshold)
+
         return {
             "scenario_type": scenario_type,
             "severity_level": severity_level,
             "semantic_pass": bool(semantic_pass),
             "threshold": float(threshold),
-            "effective_thresholds": {"total": float(threshold), "nearest_x_max": 18.0},
+            "effective_thresholds": {
+                "total": float(threshold),
+                "front_x_range": [float(x_min), float(x_max)],
+                "insert_y_abs_range": [float(y_min), float(y_max)],
+                "pseudo_ttc_range": [float(ttc_min), float(ttc_max)],
+                "lane_half_width": float(lane_half_width),
+            },
             "checks": checks,
             "notes": notes,
-            "cut_in_nearest_vehicle_x": nearest_x if np.isfinite(nearest_x) else None,
+            "cut_in_candidate_x": cand_x,
+            "cut_in_candidate_y": cand_y,
+            "cut_in_candidate_speed": cand_v,
+            "cut_in_candidate_pseudo_ttc": pseudo_ttc,
             **{k: float(v) for k, v in details.items()},
         }
 
@@ -360,7 +438,11 @@ def summarize_multiscenario_semantics(alignment: object, prompt_spec: object, ve
             vehicle_states = vehicle_states[None, :]
         valid = vehicle_states[np.asarray(vehicle_mask).astype(float) >= 0.3]
         lane_y = _lane_center_from_vector(vector)
-        same_lane = valid[(valid[:, AgentIndex.X] > 3.0) & (valid[:, AgentIndex.X] < 25.0) & (np.abs(valid[:, AgentIndex.Y] - lane_y) <= 1.8)]
+        same_lane = valid[
+            (valid[:, AgentIndex.X] > 3.0)
+            & (valid[:, AgentIndex.X] < 25.0)
+            & (np.abs(valid[:, AgentIndex.Y] - lane_y) <= 1.8)
+        ]
         nearest = same_lane[np.argmin(same_lane[:, AgentIndex.X])] if len(same_lane) > 0 else None
         nearest_x = float(nearest[AgentIndex.X]) if nearest is not None else 1e9
         nearest_v = float(nearest[AgentIndex.VELOCITY]) if nearest is not None else 1e9
@@ -486,11 +568,19 @@ class MultiScenarioHalfDenoiseRunner:
         rel = edited_scene_path.parent.relative_to(self.edited_dir)
         return self.out_root / rel
 
-    def _scenario_cache_dir(self, edited_scene_path: Path, index: int) -> Path:
+    def _scenario_cache_token(self, edited_scene_path: Path, index: int) -> str:
         rel = edited_scene_path.parent.relative_to(self.edited_dir)
+        parts = rel.parts
+        log_id = parts[0] if len(parts) >= 1 else "unknown_log"
+        scene_token = parts[-1] if len(parts) >= 1 else f"scene_{index:06d}"
         if self.args.output_layout == "flat":
-            rel = Path(f"{index:06d}_{edited_scene_path.parent.name}")
-        return self.scenario_cache_root / rel
+            return f"{index:06d}_{scene_token}"
+        return f"{log_id}__{scene_token}"
+
+    def _scenario_cache_dir(self, edited_scene_path: Path, prompt_spec, index: int) -> Path:
+        dangerous_scenario_type = str(getattr(prompt_spec, "scenario_type", "generic") or "generic")
+        token = self._scenario_cache_token(edited_scene_path, index)
+        return self.scenario_cache_root / "log" / dangerous_scenario_type / token
 
     def _load_prompt_spec(self, edited_scene_dir: Path):
         prompt = None
@@ -547,7 +637,6 @@ class MultiScenarioHalfDenoiseRunner:
 
         prompt_spec, prompt, scenario_meta = self._load_prompt_spec(edited_scene_path.parent)
         if str(prompt_spec.scenario_type) not in DEFAULT_SCENARIO_TYPES:
-            # still allow generic, but mark it in summary
             pass
         map_id = resolve_map_id(edited_scene_path, self.args.map_id, getattr(prompt_spec, "map_id", None))
 
@@ -649,12 +738,40 @@ class MultiScenarioHalfDenoiseRunner:
 
         scenario_vector_path = None
         if best is not None:
-            scenario_cache_dir = self._scenario_cache_dir(edited_scene_path, index)
+            scenario_cache_dir = self._scenario_cache_dir(edited_scene_path, prompt_spec, index)
             scenario_cache_dir.mkdir(parents=True, exist_ok=True)
             scenario_vector_path = save_gz_pickle(
                 scenario_cache_dir / "sledge_vector",
                 feature_to_raw_scene_dict(best["vector"]),
             )
+
+            rel_dir = edited_scene_path.parent.relative_to(self.edited_dir)
+            rel_parts = rel_dir.parts
+            original_log_id = rel_parts[0] if len(rel_parts) >= 1 else "unknown_log"
+            original_source_bucket = rel_parts[1] if len(rel_parts) >= 2 else "unknown_source"
+            original_scene_token = rel_parts[-1] if len(rel_parts) >= 1 else "unknown_token"
+
+            save_json(
+                scenario_cache_dir / "scenario_label.json",
+                {
+                    "dangerous_scenario_type": str(prompt_spec.scenario_type),
+                    "severity_level": str(getattr(prompt_spec, "severity_level", "moderate")),
+                    "prompt": prompt,
+                    "original_scene_path": str(original_scene_path),
+                    "edited_scene_path": str(edited_scene_path),
+                    "original_log_id": original_log_id,
+                    "original_source_bucket": original_source_bucket,
+                    "original_scene_token": original_scene_token,
+                    "cache_token": scenario_cache_dir.name,
+                    "selected_source": best["source"],
+                    "selected_alignment_total": float(best["alignment_total"]),
+                    "selected_semantic_pass": bool(best["semantic_summary"]["semantic_pass"]),
+                    "selected_compliant": bool(best["compliance"]["compliant"]),
+                    "selected_preservation_ratio": float(best["preservation_ratio"]),
+                    "used_start_timestep_index": int(best["used_start_timestep_index"]),
+                },
+            )
+
             save_json(
                 out_dir / "final_prompt_alignment.json",
                 {

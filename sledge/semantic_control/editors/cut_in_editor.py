@@ -14,49 +14,65 @@ from sledge.autoencoder.preprocessing.features.sledge_vector_feature import (
 from sledge.semantic_control.prompt_spec import PromptSpec, SceneEditResult, SceneEditROI
 
 
-# V3: practical cut-in proxy for single-frame vector representation.
-# Goal is not a perfect trajectory-level lane change, but a visually obvious
-# adjacent-lane vehicle that cuts into ego lane ahead.
+# Scheme A:
+# Instead of asking simulation to execute a full lane change,
+# directly place the cut-in vehicle in a "half-inserted" or "already inserted"
+# hazardous state near / inside ego lane, ahead of ego.
+#
+# The target y is intentionally placed INSIDE the ego lane boundary
+# (|y| < lane_half_width), so that simulation snapping is more likely to keep
+# the vehicle on ego-lane rails rather than the adjacent lane.
 _SEVERITY_CFG: Dict[str, Dict[str, float]] = {
     "mild": {
-        "start_x_min": 2.0,
-        "start_x_max": 7.0,
-        "cross_x_min": 9.0,
-        "cross_x_max": 13.0,
-        "t_center_min": 1.8,
-        "t_center_max": 2.6,
-        "adjacent_y": 3.2,
+        "front_x_min": 8.0,
+        "front_x_max": 12.0,
+        "insert_y_abs_min": 1.15,
+        "insert_y_abs_max": 1.55,
+        "heading_mag_min": 0.02,
+        "heading_mag_max": 0.07,
+        "rel_speed_min": 0.0,
+        "rel_speed_max": 1.0,
     },
     "moderate": {
-        "start_x_min": 0.0,
-        "start_x_max": 5.0,
-        "cross_x_min": 6.0,
-        "cross_x_max": 10.0,
-        "t_center_min": 1.2,
-        "t_center_max": 1.8,
-        "adjacent_y": 3.3,
+        "front_x_min": 5.5,
+        "front_x_max": 8.5,
+        "insert_y_abs_min": 0.70,
+        "insert_y_abs_max": 1.15,
+        "heading_mag_min": 0.03,
+        "heading_mag_max": 0.10,
+        "rel_speed_min": 0.4,
+        "rel_speed_max": 1.5,
     },
     "aggressive": {
-        "start_x_min": -2.0,
-        "start_x_max": 3.0,
-        "cross_x_min": 3.5,
-        "cross_x_max": 7.0,
-        "t_center_min": 0.8,
-        "t_center_max": 1.2,
-        "adjacent_y": 3.4,
+        "front_x_min": 3.0,
+        "front_x_max": 6.0,
+        "insert_y_abs_min": 0.25,
+        "insert_y_abs_max": 0.75,
+        "heading_mag_min": 0.05,
+        "heading_mag_max": 0.14,
+        "rel_speed_min": 0.8,
+        "rel_speed_max": 2.0,
     },
 }
 
 
 class CutInEditor:
-    """Practical adjacent-lane front cut-in editor for Sledge single-frame scenes."""
+    """
+    Front-insert cut-in proxy for simulation.
+
+    Key design:
+    - vehicle is already partially inserted into ego lane
+    - vehicle is placed ahead of ego
+    - vehicle heading still has a slight tendency toward lane center
+    - remove blocking same-lane vehicles near the insertion zone
+    """
 
     def __init__(self) -> None:
         self._ego_lane_y = 0.0
         self._lane_half_width_m = 1.8
         self._clearance_radius_m = 2.2
-        self._spawn_x_jitter = [0.0, -1.0, 1.0, -2.0, 2.0]
-        self._min_speed = 3.0
+        self._spawn_x_jitter = [0.0, -0.8, 0.8, -1.5, 1.5]
+        self._min_speed = 2.5
         self._max_speed = 15.0
 
     def edit(self, scene: SledgeVectorRaw, spec: PromptSpec) -> Tuple[SledgeVectorRaw, SceneEditResult]:
@@ -77,42 +93,33 @@ class CutInEditor:
         else:
             side_sign = self._choose_side(edited)
 
-        start_x = 0.5 * (cfg["start_x_min"] + cfg["start_x_max"])
-        cross_x = 0.5 * (cfg["cross_x_min"] + cfg["cross_x_max"])
-        t_center = 0.5 * (cfg["t_center_min"] + cfg["t_center_max"])
-        start_y = side_sign * cfg["adjacent_y"]
+        # Put the vehicle ahead of ego and already inside ego-lane boundary
+        target_x = 0.5 * (cfg["front_x_min"] + cfg["front_x_max"])
+        insert_y_abs = 0.5 * (cfg["insert_y_abs_min"] + cfg["insert_y_abs_max"])
+        target_y = side_sign * insert_y_abs
 
-        # We want the vehicle to roughly cross ego-lane center at t_center.
-        # Use direct component design rather than weak heading-only drift.
-        vy = -side_sign * (abs(start_y - lane_y) / max(t_center, 1e-3))
-        vx = (cross_x - start_x) / max(t_center, 1e-3)
+        # Slight heading toward lane center to preserve "recently cut in" feel.
+        heading_mag = 0.5 * (cfg["heading_mag_min"] + cfg["heading_mag_max"])
+        heading = -side_sign * heading_mag
 
-        # Ensure longitudinal motion is not too weak
-        vx = max(vx, ego_speed + 0.5)
-        vx = float(np.clip(vx, self._min_speed, self._max_speed))
-        speed = float(np.clip(math.hypot(vx, vy), self._min_speed, self._max_speed))
-        heading = float(math.atan2(vy, max(vx, 1e-3)))
+        rel_speed = 0.5 * (cfg["rel_speed_min"] + cfg["rel_speed_max"])
+        speed = float(np.clip(ego_speed + rel_speed, self._min_speed, self._max_speed))
 
-        # Recompute cross_x after clipping vx for more honest notes/ROIs
-        cross_x = float(start_x + vx * t_center)
+        target_x, target_y = self._resolve_spawn_overlap(edited, target_x, target_y)
 
-        start_x, start_y = self._resolve_spawn_overlap(edited, start_x, start_y)
-
-        # Make the insertion visually cleaner:
-        # remove one same-lane vehicle near the target front-insert zone if it blocks the cut-in.
+        # Remove one blocking same-lane vehicle in front insertion zone
         removed_indices = self._clear_conflicting_same_lane_vehicle(
             edited.vehicles,
-            target_x=cross_x,
+            target_x=target_x,
             lane_y=lane_y,
-            exclude_side_sign=side_sign,
         )
 
         vehicle_idx = self._allocate_vehicle_slot(edited.vehicles)
         self._set_vehicle_state(
             edited.vehicles,
             vehicle_idx,
-            x=start_x,
-            y=start_y,
+            x=target_x,
+            y=target_y,
             heading=heading,
             width=1.9,
             length=4.8,
@@ -122,24 +129,23 @@ class CutInEditor:
         rois = self._build_rois(
             vehicle_state=edited.vehicles.states[vehicle_idx],
             lane_y=lane_y,
-            cross_x=cross_x,
+            insert_x=target_x,
         )
 
         result = SceneEditResult(
             prompt_spec=spec,
             primary_actor_type="vehicle",
             primary_actor_index=vehicle_idx,
-            conflict_point_xy=[float(cross_x), float(lane_y)],
+            conflict_point_xy=[float(target_x), float(lane_y)],
             preserved_rois=rois,
             removed_vehicle_indices=removed_indices,
             notes=[
-                f"scenario set to practical front cut-in ({severity})",
+                f"scenario set to front-insert cut-in proxy ({severity})",
                 f"ego speed estimate is {ego_speed:.2f} m/s",
-                f"start pose = ({start_x:.2f}, {start_y:.2f})",
-                f"predicted center-cross time = {t_center:.2f} s",
-                f"predicted center-cross x = {cross_x:.2f} m",
-                f"velocity components vx={vx:.2f} m/s vy={vy:.2f} m/s",
-                f"heading={heading:.3f} rad speed={speed:.2f} m/s",
+                f"vehicle placed ahead at x={target_x:.2f} m",
+                f"vehicle inserted into ego lane at y={target_y:.2f} m",
+                f"vehicle heading set to {heading:.3f} rad toward lane center",
+                f"vehicle speed set to {speed:.2f} m/s",
                 f"side_sign={side_sign:+.0f}",
                 f"removed blocking vehicles: {removed_indices}",
             ],
@@ -190,7 +196,6 @@ class CutInEditor:
         elem: SledgeVectorElement,
         target_x: float,
         lane_y: float,
-        exclude_side_sign: float,
     ) -> List[int]:
         states = np.asarray(elem.states)
         mask = np.asarray(elem.mask).astype(bool)
@@ -201,7 +206,7 @@ class CutInEditor:
             x = float(states[idx, AgentIndex.X])
             y = float(states[idx, AgentIndex.Y])
 
-            if abs(y - lane_y) < 1.2 and (target_x - 2.0) <= x <= (target_x + 4.0):
+            if abs(y - lane_y) < 1.2 and (target_x - 2.0) <= x <= (target_x + 5.0):
                 elem.mask[idx] = False
                 removed.append(int(idx))
                 break
@@ -245,7 +250,7 @@ class CutInEditor:
         self,
         vehicle_state: np.ndarray,
         lane_y: float,
-        cross_x: float,
+        insert_x: float,
     ) -> list[SceneEditROI]:
         x = float(vehicle_state[AgentIndex.X])
         y = float(vehicle_state[AgentIndex.Y])
@@ -262,16 +267,16 @@ class CutInEditor:
                 tag="vehicle",
             ),
             SceneEditROI(
-                x_min=min(x, cross_x) - 2.0,
+                x_min=x - 2.0,
                 y_min=y0 - 1.0,
-                x_max=max(x, cross_x) + 2.0,
+                x_max=insert_x + 3.0,
                 y_max=y1 + 1.0,
                 tag="merge_corridor",
             ),
             SceneEditROI(
-                x_min=cross_x - 2.0,
+                x_min=insert_x - 2.0,
                 y_min=lane_y - self._lane_half_width_m - 0.8,
-                x_max=cross_x + 3.0,
+                x_max=insert_x + 3.0,
                 y_max=lane_y + self._lane_half_width_m + 0.8,
                 tag="ego_lane_entry_anchor",
             ),
