@@ -90,36 +90,51 @@ class SledgeIDMAgentManager:
 
                 # Checking if there are agents intersecting THIS agent's baseline.
                 # Hence, we are checking for at least 2 intersecting agents.
+                # Checking if there are agents intersecting THIS agent's baseline.
+                # Hence, we are checking for at least 2 intersecting agents.
                 if intersecting_agents.size > 1:
+                    try:
+                        nearest_result = intersecting_agents.get_nearest_entry_to(agent_token)
+                    except Exception:
+                        nearest_result = None
 
-                    nearest_id, nearest_agent_polygon, relative_distance = intersecting_agents.get_nearest_entry_to(
-                        agent_token
-                    )
-                    agent_heading = agent.to_se2().heading
-
-                    if "ego" in nearest_id:
-                        ego_velocity = ego_state.dynamic_car_state.rear_axle_velocity_2d
-                        longitudinal_velocity = np.hypot(ego_velocity.x, ego_velocity.y)
-                        relative_heading = ego_state.rear_axle.heading - agent_heading
-                    elif "stop_line" in nearest_id:
-                        longitudinal_velocity = 0.0
-                        relative_heading = 0.0
-                    elif nearest_id in self.vehicles:
-                        nearest_agent = self.vehicles[nearest_id]
-                        longitudinal_velocity = nearest_agent.velocity
-                        relative_heading = nearest_agent.to_se2().heading - agent_heading
+                    if (
+                            nearest_result is None
+                            or len(nearest_result) != 3
+                            or nearest_result[0] is None
+                            or nearest_result[2] is None
+                    ):
+                        # Fallback: treat as free-road case if nearest lookup failed
+                        projected_velocity = 0.0
+                        relative_distance = agent.get_progress_to_go()
+                        length_rear = agent.length / 2
                     else:
-                        longitudinal_velocity = 0.0
-                        relative_heading = 0.0
+                        nearest_id, nearest_agent_polygon, relative_distance = nearest_result
+                        agent_heading = agent.to_se2().heading
 
-                    # Wrap angle to [-pi, pi]
-                    relative_heading = principal_value(relative_heading)
-                    # take the longitudinal component of the projected velocity
-                    projected_velocity = rotate_angle(StateSE2(longitudinal_velocity, 0, 0), relative_heading).x
+                        if "ego" in nearest_id:
+                            ego_velocity = ego_state.dynamic_car_state.rear_axle_velocity_2d
+                            longitudinal_velocity = np.hypot(ego_velocity.x, ego_velocity.y)
+                            relative_heading = ego_state.rear_axle.heading - agent_heading
+                        elif "stop_line" in nearest_id:
+                            longitudinal_velocity = 0.0
+                            relative_heading = 0.0
+                        elif nearest_id in self.vehicles:
+                            nearest_agent = self.vehicles[nearest_id]
+                            longitudinal_velocity = nearest_agent.velocity
+                            relative_heading = nearest_agent.to_se2().heading - agent_heading
+                        else:
+                            longitudinal_velocity = 0.0
+                            relative_heading = 0.0
 
-                    # relative_distance already takes the vehicle dimension into account.
-                    # Therefore there is no need to pass in the length_rear.
-                    length_rear = 0
+                        # Wrap angle to [-pi, pi]
+                        relative_heading = principal_value(relative_heading)
+                        # take the longitudinal component of the projected velocity
+                        projected_velocity = rotate_angle(StateSE2(longitudinal_velocity, 0, 0), relative_heading).x
+
+                        # relative_distance already takes the vehicle dimension into account.
+                        # Therefore there is no need to pass in the length_rear.
+                        length_rear = 0
                 else:
                     # Free road case: no leading vehicle
                     projected_velocity = 0.0

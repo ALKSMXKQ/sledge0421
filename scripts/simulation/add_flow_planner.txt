@@ -1,0 +1,93 @@
+一、已确定改过的文件
+
+| 文件                                                                                                                                                          | 改动性质 | 具体改了什么                                 | 是否影响原 SLEDGE 主流程 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------------------------------------- | ---------------- |
+| `/home16T/home8T_1/leitingting/sledge_workspace/sledge/scripts/simulation/flow_planner_simulation.sh`                                                       | 明确改过 | 新增/修改为 SLEDGE 版 Flow-Planner 启动脚本      | 否                |
+| `/home16T/home8T_1/leitingting/sledge_workspace/sledge/sledge/script/config/common/simulation_metric/simulation_closed_loop_reactive_agents.yaml`           | 明确改过 | 从 reactive high-level metric 列表中删掉缺失指标 | 是                |
+| `/home16T/home8T_1/leitingting/sledge_workspace/sledge/sledge/script/config/simulation/metric_aggregator/closed_loop_reactive_agents_weighted_average.yaml` | 明确改过 | 从 reactive 聚合权重里同步删掉对应缺失指标             | 是                |
+
+### 1）`flow_planner_simulation.sh`
+
+* 入口改成
+  `python "${SLEDGE_ROOT}/sledge/script/run_simulation.py"`
+* planner 改成
+  `planner=flow_planner`
+* 传入：
+
+  * `planner.flow_planner.config_path=...`
+  * `planner.flow_planner.ckpt_path=...`
+  * `++planner.flow_planner.enable_ema=false`
+  * `++planner.flow_planner.device=cuda`
+* challenge 使用
+  `+simulation=sledge_reactive_agents`
+* 观测器使用
+  `observation=sledge_agents_observation`
+* 场景来源使用
+  `cache.scenario_cache_path=...`
+* 你后来又把缓存目录切到了
+  `scenario_cache_multiscenario`
+* 又加了：
+  * `export SLEDGE_RANDOM_SAMPLE=1000`
+  * `export SLEDGE_RANDOM_SEED=42`
+* 并保持并行：
+  * `worker=ray_distributed`
+  * `worker.threads_per_node=8`
+  * `number_of_gpus_allocated_per_simulation=0.5`
+
+
+ 2）`simulation_closed_loop_reactive_agents.yaml`
+
+为了兼容当前本地 `nuplan-devkit`，删掉了缺失的 high-level metric：
+
+    # minimum_comfortable_interaction_distance_statistics`
+    # collision_probability_statistics: -217.0
+    # global_expected_risk_statistics: -217.0
+    # continuous_path_visibility_risk_score_statistics: -174.0
+    # local_risk_difference_coefficient_metric: -174.0
+
+
+### 3）`closed_loop_reactive_agents_weighted_average.yaml`
+
+这个文件和上一个是配套修改。
+
+因为你不仅要从 high-level metric 列表里删掉缺失项，还要从最终聚合权重里把它们同步删掉，否则评分定义会不一致。你当时的 `grep` 结果已经把这条引用链定位出来了：SLEDGE 的 reactive metric 列表和 aggregator 都引用了这些指标 。
+
+---
+
+二、高概率改过，但建议你本地再确认的文件
+
+| 文件                                                                                                   | 改动概率 | 可能改了什么                                                   | 是否影响原 SLEDGE 主流程 |
+| ---------------------------------------------------------------------------------------------------- | ---- | -------------------------------------------------------- | ---------------- |
+| `/home16T/home8T_1/leitingting/sledge_workspace/sledge/sledge/script/builders/simulation_builder.py` | 高    | 增加随机抽样逻辑，避免按顺序取前 N 个场景                                   | 是                |
+| `/home16T/home8T_1/leitingting/Flow-Planner/flow_planner/planner.py`                                 | 中    | 可选把 `name()` 从 `"diffusion_planner"` 改成 `"flow_planner"` | 否                |
+
+ 4）`simulation_builder.py`
+
+* 不想按顺序取前 1000 个
+* 想从全部场景里随机抽 1000 个
+
+* 在 builder 里增加一个随机采样函数
+* 通过环境变量控制：
+
+  * `SLEDGE_RANDOM_SAMPLE`
+  * `SLEDGE_RANDOM_SEED`
+* 在 `find_feature_paths(cache_path, feature_name="sledge_vector")` 之后做：
+
+  * 随机打乱
+  * 再截取前 1000
+
+ 5）`flow_planner/planner.py`
+
+这个文件里，官方当前实现有一个很容易混淆的点：
+
+`FlowPlanner.name()` 返回的是 `"diffusion_planner"`，不是 `"flow_planner"`
+
+如果你照我前面的建议改过，那就是：
+
+* 把返回值改成 `"flow_planner"`
+
+这不会影响功能，但会影响：
+
+* parquet 里的 planner 名字
+* runner report 里的显示
+* 后面回溯时是否容易混淆成 DiffusionPlanner

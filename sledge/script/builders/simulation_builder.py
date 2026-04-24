@@ -5,6 +5,11 @@ from typing import List, Optional
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
+#####################################################################################
+import os
+import random
+#####################################################################################
+
 from nuplan.planning.utils.multithreading.worker_pool import WorkerPool
 from nuplan.planning.script.builders.metric_builder import build_metrics_engines
 from nuplan.planning.script.builders.observation_builder import build_observations
@@ -28,6 +33,28 @@ from sledge.common.helper.cache_helper import find_feature_paths
 
 logger = logging.getLogger(__name__)
 
+#####################################################################################
+def _maybe_random_sample_paths(paths):
+    """
+    默认不采样。
+    只有设置环境变量 SLEDGE_RANDOM_SAMPLE>0 时，才随机打乱并截取前 k 个。
+    """
+    paths = list(paths)
+
+    sample_k = int(os.getenv("SLEDGE_RANDOM_SAMPLE", "0"))
+    seed = int(os.getenv("SLEDGE_RANDOM_SEED", "42"))
+
+    if sample_k <= 0:
+        return paths
+
+    rng = random.Random(seed)
+    rng.shuffle(paths)
+
+    if sample_k >= len(paths):
+        return paths
+
+    return paths[:sample_k]
+#####################################################################################
 
 def build_simulations(
     cfg: DictConfig,
@@ -61,12 +88,13 @@ def build_simulations(
     ######################################################################################
 
     sledge_vector_paths = find_feature_paths(cache_path, feature_name="sledge_vector")
-    ####################################################################################
-    logger.info(f"Found {len(sledge_vector_paths)} scenario files")
-    logger.debug(f"First 3 paths: {sledge_vector_paths[:3]}")  # 打印前3个文件路径
-    ###################################################################################
+
+    ######################################################################################
+    sledge_vector_paths = _maybe_random_sample_paths(sledge_vector_paths)
+    ######################################################################################
 
     ####################################################################################
+    logger.info(f"Found {len(sledge_vector_paths)} scenario files")
     # 3. 带进度的场景加载
     scenarios = []
     for i, path in enumerate(sledge_vector_paths):

@@ -37,6 +37,7 @@ from sledge.simulation.scenarios.sledge_scenario.sledge_scenario_utils import (
 FUTURE_SAMPLING = TrajectorySampling(time_horizon=15, interval_length=0.1)
 TRAFFIC_LIGHT_FLIP = 10.0  # [s]
 ROUTE_LENGTH = 32  # [m]
+PAST_HISTORY_OFFSET_S = 2.1
 
 
 class SledgeScenario(AbstractScenario):
@@ -59,13 +60,29 @@ class SledgeScenario(AbstractScenario):
 
         # TODO: add to some config
         self._future_sampling = FUTURE_SAMPLING
+        self._time_offset_us = int(round(PAST_HISTORY_OFFSET_S * 1e6))
         self._time_points = [
-            TimePoint(int(time_s * 1e6))
-            for time_s in np.arange(0, self._future_sampling.time_horizon, self._future_sampling.interval_length)
+            TimePoint(self._time_offset_us + int(time_s * 1e6))
+            for time_s in np.arange(
+                0, self._future_sampling.time_horizon, self._future_sampling.interval_length
+            )
         ]
         self._number_of_iterations = len(self._time_points)
 
         self._route_roadblock_ids, self._route_path = get_route(self._map_api)
+
+    def _dt(self) -> float:
+        return self._future_sampling.interval_length  # 0.1s
+
+    def _num_past_steps(self, time_horizon: float, num_samples: Optional[int]) -> int:
+        if num_samples is not None:
+            return num_samples
+        return int(round(time_horizon / self.database_interval))
+
+    def _past_dt(self, time_horizon: float, num_samples: Optional[int]) -> float:
+        if num_samples is not None and num_samples > 0:
+            return time_horizon / num_samples
+        return self.database_interval
 
     def __reduce__(self) -> Tuple[Type["SledgeScenario"], Tuple[Any, ...]]:
         """
@@ -217,16 +234,14 @@ class SledgeScenario(AbstractScenario):
         return detection_tracks
 
     def get_tracked_objects_within_time_window_at_iteration(
-        self,
-        iteration: int,
-        past_time_horizon: float,
-        future_time_horizon: float,
-        filter_track_tokens: Optional[Set[str]] = None,
-        future_trajectory_sampling: Optional[TrajectorySampling] = None,
+            self,
+            iteration: int,
+            past_time_horizon: float,
+            future_time_horizon: float,
+            filter_track_tokens: Optional[Set[str]] = None,
+            future_trajectory_sampling: Optional[TrajectorySampling] = None,
     ) -> DetectionsTracks:
-        """Inherited, see superclass."""
-        assert 0 <= iteration < self.get_number_of_iterations(), f"Iteration is out of scenario: {iteration}!"
-        raise NotImplementedError
+        return self.get_tracked_objects_at_iteration(iteration)
 
     def get_sensors_at_iteration(self, iteration: int, channels: Optional[List[SensorChannel]] = None) -> Sensors:
         """Inherited, see superclass."""
@@ -241,18 +256,46 @@ class SledgeScenario(AbstractScenario):
             yield self.get_time_point(idx)
 
     def get_past_timestamps(
-        self, iteration: int, time_horizon: float, num_samples: Optional[int] = None
+            self, iteration: int, time_horizon: float, num_samples: Optional[int] = None
     ) -> Generator[TimePoint, None, None]:
-        """Inherited, see superclass."""
-        yield from []  # placeholder
+        num = self._num_past_steps(time_horizon, num_samples)
+        step_us = int(round(self._past_dt(time_horizon, num_samples) * 1e6))
+        cur_us = self.get_time_point(iteration).time_us
+
+        for k in range(num, 0, -1):
+            t_us = cur_us - k * step_us
+            assert t_us >= 0, f"Negative past timestamp generated: {t_us}"
+            yield TimePoint(t_us)
 
     def get_ego_past_trajectory(
-        self, iteration: int, time_horizon: float, num_samples: Optional[int] = None
+            self, iteration: int, time_horizon: float, num_samples: Optional[int] = None
     ) -> Generator[EgoState, None, None]:
-        """Inherited, see superclass."""
-        # indices = sample_future_indices(self._future_sampling, iteration, time_horizon, num_samples)
-        for idx in [0]:
-            yield self.get_ego_state_at_iteration(idx)
+        num = self._num_past_steps(time_horizon, num_samples)
+        past_dt = self._past_dt(time_horizon, num_samples)
+        step_us = int(round(past_dt * 1e6))
+
+        speed = float(self._sledge_vector.ego.states)
+        initial_distance = self._route_path.project(Point(0, 0))
+        distance_per_iteration = ROUTE_LENGTH / self._future_sampling.num_poses
+        current_distance = initial_distance + distance_per_iteration * iteration
+        cur_us = self.get_time_point(iteration).time_us
+
+        for k in range(num, 0, -1):
+            t_us = cur_us - k * step_us
+            assert t_us >= 0, f"Negative past ego timestamp generated: {t_us}"
+
+            back_distance = max(0.0, current_distance - speed * past_dt * k)
+            center = self._route_path.interpolate([back_distance])[0]
+            time_point = TimePoint(t_us)
+
+            yield EgoState.build_from_center(
+                center=center,
+                center_velocity_2d=StateVector2D(speed, 0),
+                center_acceleration_2d=StateVector2D(0, 0),
+                tire_steering_angle=0.0,
+                time_point=time_point,
+                vehicle_parameters=self._ego_vehicle_parameters,
+            )
 
     def get_ego_future_trajectory(
         self, iteration: int, time_horizon: float, num_samples: Optional[int] = None
@@ -263,16 +306,16 @@ class SledgeScenario(AbstractScenario):
             yield self.get_ego_state_at_iteration(idx)
 
     def get_past_tracked_objects(
-        self,
-        iteration: int,
-        time_horizon: float,
-        num_samples: Optional[int] = None,
-        future_trajectory_sampling: Optional[TrajectorySampling] = None,
+            self,
+            iteration: int,
+            time_horizon: float,
+            num_samples: Optional[int] = None,
+            future_trajectory_sampling: Optional[TrajectorySampling] = None,
     ) -> Generator[DetectionsTracks, None, None]:
-        """Inherited, see superclass."""
-        # indices = sample_future_indices(self._future_sampling, iteration, time_horizon, num_samples)
-        for idx in [0]:
-            yield self.get_tracked_objects_at_iteration(idx)
+        num = self._num_past_steps(time_horizon, num_samples)
+        current_tracks = self.get_tracked_objects_at_iteration(iteration)
+        for _ in range(num):
+            yield current_tracks
 
     def get_future_tracked_objects(
         self,

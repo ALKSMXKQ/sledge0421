@@ -77,12 +77,32 @@ class SledgeLane(Lane):
     @cached_property
     def left_boundary(self) -> PolylineMapObject:
         """Inherited from superclass."""
-        raise NotImplementedError
+        linestring = LineString(self._sledge_map_graph.baseline_paths_dict[self.id][:, :2])
+        try:
+            # 向左平移 1.75 米 (半个车道宽)
+            left_line = linestring.parallel_offset(1.75, 'left')
+            # 💡 关键修复：检查生成的线段类型及长度，防止 AssertionError
+            if left_line.geom_type != 'LineString' or left_line.length < 0.01:
+                left_line = linestring
+        except Exception:
+            left_line = linestring  # 如果平移失败，安全降级为中心线
+
+        return SledgePolylineMapObject(self.id, left_line)
 
     @cached_property
     def right_boundary(self) -> PolylineMapObject:
         """Inherited from superclass."""
-        raise NotImplementedError
+        linestring = LineString(self._sledge_map_graph.baseline_paths_dict[self.id][:, :2])
+        try:
+            # 向右平移 1.75 米
+            right_line = linestring.parallel_offset(1.75, 'right')
+            # 💡 关键修复：检查生成的线段类型及长度，防止 AssertionError
+            if right_line.geom_type != 'LineString' or right_line.length < 0.01:
+                right_line = linestring
+        except Exception:
+            right_line = linestring
+
+        return SledgePolylineMapObject(self.id, right_line)
 
     def get_roadblock_id(self) -> str:
         """Inherited from superclass."""

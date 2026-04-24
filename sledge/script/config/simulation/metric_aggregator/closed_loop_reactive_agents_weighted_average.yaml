@@ -6,15 +6,15 @@ closed_loop_reactive_agents_weighted_average:
     drivable_area_compliance_statistics: 42.0
     no_ego_at_fault_collisions_statistics: 208.0
     time_to_collision_within_bound_statistics: 208.0
-    minimum_comfortable_interaction_distance_statistics: -174.0
+    # minimum_comfortable_interaction_distance_statistics: -174.0
     speed_limit_compliance_statistics: 167.0
     ego_is_comfortable_statistics: 83.0
     ego_is_making_progress_statistics: 42.0
     driving_direction_compliance_statistics: 42.0
-    collision_probability_statistics: -217.0
-    global_expected_risk_statistics: -217.0
-    continuous_path_visibility_risk_score_statistics: -174.0
-    local_risk_difference_coefficient_metric: -174.0
+    # collision_probability_statistics: -217.0
+    # global_expected_risk_statistics: -217.0
+    # continuous_path_visibility_risk_score_statistics: -174.0
+    # local_risk_difference_coefficient_metric: -174.0
 
 
     # Low level metrics

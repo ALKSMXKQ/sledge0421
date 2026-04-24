@@ -13,12 +13,12 @@ defaults:
       - drivable_area_compliance_statistics
       - no_ego_at_fault_collisions_statistics
       - time_to_collision_within_bound_statistics
-      - minimum_comfortable_interaction_distance_statistics
+      # - minimum_comfortable_interaction_distance_statistics
       - speed_limit_compliance_statistics
       - ego_is_comfortable_statistics
       - ego_is_making_progress_statistics
       - driving_direction_compliance_statistics
-      - collision_probability_statistics
-      - global_expected_risk_statistics
-      - continuous_path_visibility_risk_score_statistics
-      - local_risk_difference_coefficient_metric
+      # - collision_probability_statistics
+      # - global_expected_risk_statistics
+      # - continuous_path_visibility_risk_score_statistics
+      # - local_risk_difference_coefficient_metric

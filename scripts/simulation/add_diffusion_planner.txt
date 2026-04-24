@@ -1,0 +1,69 @@
+把 `Diffusion-Planner` 接到 `SLEDGE` 上，去评估 SLEDGE 生成的 `gz` 场景驾驶得分的改动包括：
+
+ 1）`sledge/scripts/simulation/diffusion_planner_simulation.sh`  主入口脚本
+* `planner=diffusion_planner`
+* 输入是 `scenario_cache` 里的 `sledge_vector.gz`
+* 输出是 SLEDGE 仿真结果和驾驶指标
+
+* 指定 `planner=diffusion_planner`
+* 指定 Diffusion-Planner checkpoint 路径：
+  * `planner.diffusion_planner.config.args_file=.../args.json`
+  * `planner.diffusion_planner.ckpt_path=.../model.pth`
+* 指定设备：
+  * `planner.diffusion_planner.device=cuda`
+  * `CUDA_VISIBLE_DEVICES=1`
+* 指定场景来源：
+  * `cache.scenario_cache_path=/.../scenario_cache`
+* 指定 observation：
+  * `observation=sledge_agents_observation`
+* 指定 challenge：
+  * 最终实际跑通的是 `sledge_reactive_agents`
+* 指定 Hydra 搜索路径：
+  * `pkg://sledge.script.config.common`
+  * `pkg://sledge.script.experiments`
+  * `pkg://diffusion_planner.config`
+  * `pkg://nuplan.planning.script.config.common`
+  * `pkg://nuplan.planning.script.config.simulation`
+  * `pkg://nuplan.planning.script.experiments`
+* 调整 worker：
+  * `ray_distributed`
+* 调整 GPU 并发：
+  * `number_of_gpus_allocated_per_simulation=...`
+
+ 2）`Diffusion-Planner/diffusion_planner/data_process/data_processor.py`
+### 实际改动内容
+调试时增加打印信息
+
+ 3）`sledge/simulation/scenarios/sledge_scenario/sledge_scenario.py`
+你当时遇到过：
+* `RuntimeError: dx is not monotonically increasing!`
+而排查结果显示：
+* `get_time_point(0).time_us = 2000000`
+* 但 `next(sc.get_past_timestamps(...)).time_us = 0`
+这说明过去轨迹/时间戳返回顺序有问题，或者当前帧与历史帧拼接顺序不满足单调递增要求。
+
+### 改动包含：
+* `get_past_timestamps()`
+* `get_ego_past_trajectory()`
+
+改动目标通常是：
+
+* 保证返回顺序从**过去到当前**严格递增
+* 避免重复时间戳
+* 避免把 `0` 时间放到 `2s` 当前帧后面
+
+### 对原 SLEDGE 流程的影响
+
+ 4）`sledge/script/builders/simulation_builder.py`
+
+因为你后来出现过这些现象：
+
+* 明明找到 6243 个场景
+* 实际只加载了 100 个
+* `Metric engine is disable`
+* 跑完没有聚合指标文件
+
+### 如果你改过，这里可能做过的事
+* 调试时加了 `[:100]`，只跑前 100 个场景
+* 临时关闭 metric engine
+* 修改了场景抽样/构建逻辑
