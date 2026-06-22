@@ -1,0 +1,114 @@
+{
+  "spec_id": "roundabout_entry_merge_aggressive",
+  "description": "A four-approach roundabout scene with four paired entries and exits. Vehicles enter from straight approach roads, circulate, and leave through different straight exits while creating yield pressure, queueing, and a small-gap merge threat for the ego vehicle.",
+  "canonical_type": "Roundabout-Entry-Merge",
+  "raw_prompt": "At a four-way roundabout with four entry-exit pairs, vehicles from multiple straight approach roads enter the circular lane and exit through other straight roads at the same time; a circulating vehicle cuts across the ego vehicle's entry path with a small gap.",
+  "road_layer": {
+    "road_topology": "roundabout",
+    "lane_context": "adjacent_lane",
+    "anchor_type": "adjacent_lane",
+    "anchor_region": "front",
+    "num_lanes": 2,
+    "lane_width_m": 3.5,
+    "has_merge_area": true,
+    "require_lane_continuity": true,
+    "require_drivable_route": true,
+    "require_no_broken_boundary": true,
+    "allow_lane_generation": true,
+    "generated_road_layout": "roundabout_entry",
+    "generated_road_radius_m": 14.0
+  },
+  "actor_layer": {
+    "primary_actor": "cutin_vehicle",
+    "actor_role": "merging_actor",
+    "secondary_actor": null,
+    "supporting_actors": [
+      "ego_vehicle",
+      "circulating_cross_traffic",
+      "queued_entry_vehicles",
+      "exiting_vehicles"
+    ],
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false,
+    "allow_actor_replacement": true
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": false,
+      "occluder_type": "none",
+      "occlusion_position": "none",
+      "occlusion_level": "none"
+    },
+    "static_obstacle": {
+      "enabled": false,
+      "obstacle_type": "none",
+      "obstacle_position": "none",
+      "obstacle_size": "normal"
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "merging_conflict",
+    "conflict_direction": "left_merge",
+    "distance_relation": "small_gap",
+    "speed_relation": "fast_approach",
+    "interaction_goal": "yielding_conflict"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "ttc_range_s": [
+      0.8,
+      1.8
+    ],
+    "gap_range_m": [
+      8.0,
+      13.0
+    ],
+    "lateral_gap_range_m": [
+      0.2,
+      0.8
+    ],
+    "longitudinal_distance_range_m": [
+      8.0,
+      14.0
+    ],
+    "lateral_intrusion_range_m": [
+      1.0,
+      1.4
+    ],
+    "target_actor_speed_mps": 9.0,
+    "target_relative_speed_mps": 5.0,
+    "target_decel_range_mps2": [
+      4.0,
+      7.0
+    ],
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_road_context_match": false,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": false,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true,
+    "require_gap_in_range": true
+  },
+  "protection_layer": {
+    "protect_primary_actor": true,
+    "protect_secondary_actor": false,
+    "protect_static_obstacle": false,
+    "protect_conflict_corridor": true,
+    "protect_road_anchor": true
+  },
+  "tags": [
+    "compositional",
+    "lane_generation",
+    "roundabout",
+    "merge",
+    "cutin_vehicle",
+    "small_gap",
+    "yielding_conflict",
+    "long_tail"
+  ]
+}

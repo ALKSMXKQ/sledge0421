@@ -1,0 +1,60 @@
+{
+  "spec_id": "occluded_pedestrian_aggressive",
+  "description": "A pedestrian emerges from behind an occluding vehicle and crosses the ego path.",
+  "canonical_type": "Occluded-Pedestrian",
+  "raw_prompt": "A hidden pedestrian appears from the right side near the ego path without immediate collision.",
+  "road_layer": {
+    "road_topology": "straight",
+    "lane_context": "ego_path",
+    "anchor_type": "ego_future_path",
+    "anchor_region": "front",
+    "has_crosswalk": false,
+    "require_lane_continuity": true,
+    "require_drivable_route": true
+  },
+  "actor_layer": {
+    "primary_actor": "pedestrian",
+    "actor_role": "crossing_actor",
+    "secondary_actor": "parked_vehicle",
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": true,
+      "occluder_type": "parked_vehicle",
+      "occlusion_position": "between_ego_and_actor",
+      "occlusion_level": "partial"
+    },
+    "static_obstacle": {
+      "enabled": false
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "lateral_conflict",
+    "conflict_direction": "right_to_left",
+    "distance_relation": "close",
+    "speed_relation": "normal",
+    "interaction_goal": "near_miss"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": true,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true
+  },
+  "tags": [
+    "compositional",
+    "pedestrian",
+    "occlusion",
+    "lateral",
+    "near_miss"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "spec_id": "crossing_vehicle_intersection_left_aggressive",
+  "description": "A crossing vehicle enters the ego path from the left side at an intersection and creates a near-miss conflict.",
+  "canonical_type": "Crossing-Vehicle-Intersection",
+  "raw_prompt": "At an intersection, a vehicle suddenly crosses the ego vehicle's path from the left side, creating a near-miss situation.",
+  "road_layer": {
+    "road_topology": "intersection",
+    "lane_context": "crossing_path",
+    "anchor_type": "intersection_center",
+    "anchor_region": "front",
+    "has_intersection": true,
+    "require_lane_continuity": true,
+    "require_drivable_route": true
+  },
+  "actor_layer": {
+    "primary_actor": "vehicle",
+    "actor_role": "crossing_actor",
+    "secondary_actor": null,
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false,
+    "allow_actor_replacement": true
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": false,
+      "occluder_type": "none",
+      "occlusion_position": "none",
+      "occlusion_level": "none"
+    },
+    "static_obstacle": {
+      "enabled": false,
+      "obstacle_type": "none",
+      "obstacle_position": "none",
+      "obstacle_size": "normal"
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "crossing_path_conflict",
+    "conflict_direction": "left_to_right",
+    "distance_relation": "close",
+    "speed_relation": "fast_crossing",
+    "interaction_goal": "near_miss"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "ttc_range_s": [1.3, 2.2],
+    "gap_range_m": [5.0, 9.0],
+    "lateral_gap_range_m": [1.0, 2.0],
+    "longitudinal_distance_range_m": [10.0, 16.0],
+    "lateral_intrusion_range_m": [0.6, 1.0],
+    "target_actor_speed_mps": 6.0,
+    "target_relative_speed_mps": 4.0,
+    "target_decel_range_mps2": [3.0, 6.0],
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_road_context_match": false,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": false,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true,
+    "require_gap_in_range": true
+  },
+  "protection_layer": {
+    "protect_primary_actor": true,
+    "protect_secondary_actor": false,
+    "protect_static_obstacle": false,
+    "protect_conflict_corridor": true,
+    "protect_road_anchor": true
+  },
+  "tags": [
+    "compositional",
+    "vehicle",
+    "intersection",
+    "crossing_path",
+    "near_miss",
+    "left_to_right"
+  ]
+}

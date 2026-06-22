@@ -211,11 +211,13 @@ def process_agents(
 
     # 1. vectorized raw agents (e.g. cap max number)
     agents_states_all = agents.states
+    agents_mask_all = np.asarray(agents.mask).astype(bool)
     vector_states = np.zeros((num_agents, AgentIndex.size()), dtype=np.float32)
     vector_labels = np.zeros(num_agents, dtype=bool)
     if len(agents_states_all) > 0:
         frame_mask = coords_in_frame(agents_states_all[..., AgentIndex.POINT], config.frame)
-        agents_states_frame = agents_states_all[frame_mask]
+        valid_mask = frame_mask & agents_mask_all
+        agents_states_frame = agents_states_all[valid_mask]
         distances = np.linalg.norm(agents_states_frame[..., AgentIndex.POINT], axis=-1)
         argsort = np.argsort(distances)[:num_agents]
         agents_states_nearest = agents_states_frame[argsort]
@@ -284,12 +286,14 @@ def process_static_objects(
 
     # 1. vectorized raw static objects (e.g. cap max number)
     states_all = static_objects.states
+    mask_all = np.asarray(static_objects.mask).astype(bool)
     vector_states = np.zeros((config.num_static_objects, StaticObjectIndex.size()), dtype=np.float32)
     vector_labels = np.zeros(config.num_static_objects, dtype=bool)
 
     if len(states_all) > 0:
         frame_mask = coords_in_frame(states_all[..., StaticObjectIndex.POINT], config.frame)
-        static_states_frame = states_all[frame_mask]
+        valid_mask = frame_mask & mask_all
+        static_states_frame = states_all[valid_mask]
 
         distances = np.linalg.norm(static_states_frame[..., StaticObjectIndex.POINT], axis=-1)
         argsort = np.argsort(distances)[: config.num_static_objects]

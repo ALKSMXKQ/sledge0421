@@ -1,0 +1,108 @@
+{
+  "spec_id": "occluded_crossing_vehicle_aggressive",
+  "description": "A vehicle emerges from behind a large occluder and crosses the ego path at an intersection, producing an aggressive occluded near-miss conflict.",
+  "canonical_type": "Occluded-Crossing-Vehicle",
+  "raw_prompt": "At an intersection, a vehicle hidden behind a bus suddenly crosses the ego vehicle's path from the left side.",
+  "road_layer": {
+    "road_topology": "intersection",
+    "lane_context": "crossing_path",
+    "anchor_type": "intersection_center",
+    "anchor_region": "front",
+    "has_intersection": true,
+    "require_lane_continuity": true,
+    "require_drivable_route": true,
+    "require_no_broken_boundary": true
+  },
+  "actor_layer": {
+    "primary_actor": "vehicle",
+    "actor_role": "crossing_actor",
+    "secondary_actor": "bus",
+    "supporting_actors": [
+      "ego_vehicle"
+    ],
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false,
+    "allow_actor_replacement": true
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": true,
+      "occluder_type": "bus",
+      "occlusion_position": "between_ego_and_actor",
+      "occlusion_level": "partial"
+    },
+    "static_obstacle": {
+      "enabled": false,
+      "obstacle_type": "none",
+      "obstacle_position": "none",
+      "obstacle_size": "normal"
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "crossing_path_conflict",
+    "conflict_direction": "left_to_right",
+    "distance_relation": "close",
+    "speed_relation": "fast_crossing",
+    "interaction_goal": "near_miss"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "ttc_range_s": [
+      1.2,
+      2.0
+    ],
+    "gap_range_m": [
+      5.0,
+      9.0
+    ],
+    "lateral_gap_range_m": [
+      0.8,
+      1.6
+    ],
+    "longitudinal_distance_range_m": [
+      12.0,
+      18.0
+    ],
+    "lateral_intrusion_range_m": [
+      0.8,
+      1.4
+    ],
+    "target_actor_speed_mps": 7.0,
+    "target_relative_speed_mps": 5.0,
+    "target_decel_range_mps2": [
+      4.0,
+      7.0
+    ],
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_road_context_match": false,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": true,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true,
+    "require_gap_in_range": true
+  },
+  "protection_layer": {
+    "protect_primary_actor": true,
+    "protect_secondary_actor": true,
+    "protect_static_obstacle": false,
+    "protect_conflict_corridor": true,
+    "protect_road_anchor": true
+  },
+  "tags": [
+    "compositional",
+    "vehicle",
+    "intersection",
+    "crossing_path",
+    "occlusion",
+    "bus",
+    "fast_crossing",
+    "near_miss",
+    "left_to_right",
+    "long_tail"
+  ]
+}

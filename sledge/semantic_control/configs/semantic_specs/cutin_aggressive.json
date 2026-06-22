@@ -1,0 +1,55 @@
+{
+  "spec_id": "cutin_aggressive",
+  "description": "A vehicle cuts in aggressively from the left lane with a small gap.",
+  "canonical_type": "Cut-in",
+  "raw_prompt": "A vehicle cuts in aggressively from the left lane with a small gap.",
+  "road_layer": {
+    "road_topology": "straight",
+    "lane_context": "adjacent_lane",
+    "anchor_type": "adjacent_lane",
+    "anchor_region": "front",
+    "require_lane_continuity": true,
+    "require_drivable_route": true
+  },
+  "actor_layer": {
+    "primary_actor": "cutin_vehicle",
+    "actor_role": "merging_actor",
+    "secondary_actor": null,
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": false
+    },
+    "static_obstacle": {
+      "enabled": false
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "merging_conflict",
+    "conflict_direction": "left_merge",
+    "distance_relation": "small_gap",
+    "speed_relation": "normal",
+    "interaction_goal": "near_miss"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": false,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true
+  },
+  "tags": [
+    "canonical",
+    "vehicle",
+    "merging",
+    "near_miss"
+  ]
+}

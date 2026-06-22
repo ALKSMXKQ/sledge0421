@@ -1,0 +1,112 @@
+{
+  "spec_id": "unprotected_left_turn_oncoming_aggressive",
+  "description": "An unprotected left-turn intersection with a fast oncoming through vehicle in the opposite lane, creating severe crossing-path collision risk during the turn.",
+  "canonical_type": "Unprotected-Left-Turn-Oncoming",
+  "raw_prompt": "At an unprotected left-turn intersection, the ego vehicle turns left while a fast oncoming vehicle goes straight through the conflict zone.",
+  "road_layer": {
+    "road_topology": "intersection",
+    "lane_context": "opposite_lane",
+    "anchor_type": "intersection_center",
+    "anchor_region": "front",
+    "num_lanes": 4,
+    "lane_width_m": 3.5,
+    "has_intersection": true,
+    "has_crosswalk": true,
+    "require_lane_continuity": true,
+    "require_drivable_route": true,
+    "require_no_broken_boundary": true,
+    "allow_lane_generation": true,
+    "generated_road_layout": "unprotected_left_turn",
+    "generated_road_radius_m": 14.0
+  },
+  "actor_layer": {
+    "primary_actor": "vehicle",
+    "actor_role": "approaching_actor",
+    "secondary_actor": null,
+    "supporting_actors": [
+      "ego_vehicle"
+    ],
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false,
+    "allow_actor_replacement": true
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": false,
+      "occluder_type": "none",
+      "occlusion_position": "none",
+      "occlusion_level": "none"
+    },
+    "static_obstacle": {
+      "enabled": false,
+      "obstacle_type": "none",
+      "obstacle_position": "none",
+      "obstacle_size": "normal"
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "oncoming_conflict",
+    "conflict_direction": "opposite",
+    "distance_relation": "close",
+    "speed_relation": "fast_approach",
+    "interaction_goal": "collision_risk"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "ttc_range_s": [
+      0.6,
+      1.4
+    ],
+    "gap_range_m": [
+      8.0,
+      14.0
+    ],
+    "lateral_gap_range_m": [
+      0.2,
+      1.0
+    ],
+    "longitudinal_distance_range_m": [
+      14.0,
+      16.0
+    ],
+    "lateral_intrusion_range_m": [
+      1.0,
+      1.5
+    ],
+    "target_actor_speed_mps": 7.5,
+    "target_relative_speed_mps": 6.0,
+    "target_decel_range_mps2": [
+      5.0,
+      8.0
+    ],
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_road_context_match": false,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": false,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true,
+    "require_gap_in_range": true
+  },
+  "protection_layer": {
+    "protect_primary_actor": true,
+    "protect_secondary_actor": false,
+    "protect_static_obstacle": false,
+    "protect_conflict_corridor": true,
+    "protect_road_anchor": true
+  },
+  "tags": [
+    "compositional",
+    "lane_generation",
+    "intersection",
+    "unprotected_left_turn",
+    "oncoming_vehicle",
+    "fast_approach",
+    "collision_risk",
+    "long_tail"
+  ]
+}

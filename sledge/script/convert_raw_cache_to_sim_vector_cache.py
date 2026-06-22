@@ -41,9 +41,6 @@ SIBLING_METADATA_FILES = [
 ]
 
 
-CONVERTER_VERSION = "fixed_ego_scalar_v2"
-
-
 def resolve_gz_path(path_like: str | Path) -> Path:
     path = Path(path_like)
     return path if path.suffix == ".gz" else path.with_suffix(".gz")
@@ -341,7 +338,6 @@ class RawToVectorCacheConverter:
 
         sim_ego_states = np.asarray(sim_vector.ego.states)
         conversion_meta = {
-            "converter_version": CONVERTER_VERSION,
             "source_raw_path": str(raw_path),
             "source_format": source_format,
             "scenario_type": scenario_type,
@@ -388,7 +384,6 @@ class RawToVectorCacheConverter:
                 writer.writerow({k: row.get(k, "") for k in fieldnames})
 
         stats = {
-            "converter_version": CONVERTER_VERSION,
             "total_found": len(self.raw_paths),
             "total_converted": len(self.rows),
             "total_failed": len(self.failed_rows),
@@ -453,7 +448,5 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 if __name__ == "__main__":
-    print(f"[RUNNING_FIXED_CONVERTER_VERSION] {CONVERTER_VERSION} | ego scalar fix enabled")
-    print(f"[RUNNING_FILE] {Path(__file__).resolve()}")
     args = build_argparser().parse_args()
     RawToVectorCacheConverter(args).run()

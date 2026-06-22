@@ -98,6 +98,8 @@ class SceneEditResult:
     prompt_spec: PromptSpec
     occluder_source: str = "none"
     occluder_index: int = -1
+    occluder_elem_name: str = "vehicles"
+    static_obstacle_index: int = -1
     pedestrian_index: int = -1
 
     primary_actor_type: str = "none"
@@ -116,6 +118,8 @@ class SceneEditResult:
             "prompt_spec": self.prompt_spec.to_dict(),
             "occluder_source": self.occluder_source,
             "occluder_index": self.occluder_index,
+            "occluder_elem_name": self.occluder_elem_name,
+            "static_obstacle_index": self.static_obstacle_index,
             "pedestrian_index": self.pedestrian_index,
             "primary_actor_type": self.primary_actor_type,
             "primary_actor_index": self.primary_actor_index,

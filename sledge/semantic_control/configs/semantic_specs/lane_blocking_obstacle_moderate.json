@@ -1,0 +1,58 @@
+{
+  "spec_id": "lane_blocking_obstacle_moderate",
+  "description": "A static obstacle blocks part of the ego lane and creates trajectory blocking pressure.",
+  "canonical_type": "Lane-Blocking-Obstacle",
+  "raw_prompt": "A construction barrier partially blocks the ego lane ahead.",
+  "road_layer": {
+    "road_topology": "construction_zone",
+    "lane_context": "same_lane",
+    "anchor_type": "ego_lane_front",
+    "anchor_region": "front",
+    "require_lane_continuity": true,
+    "require_drivable_route": true
+  },
+  "actor_layer": {
+    "primary_actor": "static_obstacle",
+    "actor_role": "blocking_actor",
+    "secondary_actor": null,
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": false
+    },
+    "static_obstacle": {
+      "enabled": true,
+      "obstacle_type": "barrier",
+      "obstacle_position": "ego_lane",
+      "obstacle_size": "large"
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "lane_blocking_conflict",
+    "conflict_direction": "front",
+    "distance_relation": "close",
+    "speed_relation": "stopped",
+    "interaction_goal": "trajectory_blocking"
+  },
+  "risk_layer": {
+    "risk_level": "moderate",
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": false,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": false
+  },
+  "tags": [
+    "compositional",
+    "static_obstacle",
+    "lane_blocking",
+    "construction"
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "spec_id": "cyclist_crossing_aggressive",
+  "description": "A cyclist crosses the ego path quickly from the right side near an intersection, creating a short-TTC near-miss conflict.",
+  "canonical_type": "Cyclist-Crossing",
+  "raw_prompt": "A cyclist suddenly rides across the ego vehicle's path from the right side near an intersection, creating a near-miss situation.",
+  "road_layer": {
+    "road_topology": "intersection",
+    "lane_context": "crossing_path",
+    "anchor_type": "intersection_center",
+    "anchor_region": "front",
+    "has_intersection": true,
+    "require_lane_continuity": true,
+    "require_drivable_route": true,
+    "require_no_broken_boundary": true
+  },
+  "actor_layer": {
+    "primary_actor": "cyclist",
+    "actor_role": "crossing_actor",
+    "secondary_actor": null,
+    "supporting_actors": [
+      "ego_vehicle"
+    ],
+    "allow_actor_insertion": true,
+    "prefer_existing_actor": false,
+    "allow_actor_replacement": true
+  },
+  "object_layer": {
+    "occlusion": {
+      "enabled": false,
+      "occluder_type": "none",
+      "occlusion_position": "none",
+      "occlusion_level": "none"
+    },
+    "static_obstacle": {
+      "enabled": false,
+      "obstacle_type": "none",
+      "obstacle_position": "none",
+      "obstacle_size": "normal"
+    }
+  },
+  "interaction_layer": {
+    "conflict_type": "crossing_path_conflict",
+    "conflict_direction": "right_to_left",
+    "distance_relation": "close",
+    "speed_relation": "fast_crossing",
+    "interaction_goal": "near_miss"
+  },
+  "risk_layer": {
+    "risk_level": "aggressive",
+    "ttc_range_s": [
+      1.1,
+      1.8
+    ],
+    "gap_range_m": [
+      4.0,
+      7.0
+    ],
+    "lateral_gap_range_m": [
+      0.6,
+      1.4
+    ],
+    "longitudinal_distance_range_m": [
+      9.0,
+      14.0
+    ],
+    "lateral_intrusion_range_m": [
+      0.8,
+      1.3
+    ],
+    "target_actor_speed_mps": 5.5,
+    "target_relative_speed_mps": 4.0,
+    "target_decel_range_mps2": [
+      3.0,
+      6.0
+    ],
+    "collision_allowed": false
+  },
+  "validation_layer": {
+    "require_actor_match": true,
+    "require_road_context_match": false,
+    "require_conflict_relation": true,
+    "require_direction_match": true,
+    "require_visibility_match": false,
+    "require_lane_validity": true,
+    "require_no_initial_collision": true,
+    "require_ttc_in_range": true,
+    "require_gap_in_range": true
+  },
+  "protection_layer": {
+    "protect_primary_actor": true,
+    "protect_secondary_actor": false,
+    "protect_static_obstacle": false,
+    "protect_conflict_corridor": true,
+    "protect_road_anchor": true
+  },
+  "tags": [
+    "compositional",
+    "cyclist",
+    "intersection",
+    "crossing_path",
+    "fast_crossing",
+    "near_miss",
+    "right_to_left",
+    "long_tail"
+  ]
+}
